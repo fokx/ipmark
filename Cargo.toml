@@ -1,0 +1,11 @@
+[package]
+name = "ipmark"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+regex = "1"           # For IPv4/IPv6 regex matching
+maxminddb = "0.22"    # For MaxMind GeoIP2 (City + ASN) lookups
+qqwry = "0.1"         # For reading QQWry IP database
+lazy_static = "1"     # If you want to compile regex once globally
+lru = "0.9"   # LRU cache for storing previous lookups
