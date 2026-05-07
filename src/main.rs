@@ -2,8 +2,8 @@ mod ipv6wry_parser;
 mod qqwry_parser;
 
 use lru::LruCache;
-use maxminddb::geoip2;
 use maxminddb::Reader;
+use maxminddb::geoip2;
 use regex::Regex;
 use std::io::{self, BufRead, Write};
 use std::net::IpAddr;
@@ -25,7 +25,7 @@ struct Cli {
     maxmind: bool,
 }
 
-struct MMDB {
+struct Mmdb {
     enable: bool,
     mmdb_city: Option<Reader<Vec<u8>>>,
     mmdb_asn: Option<Reader<Vec<u8>>>,
@@ -36,7 +36,7 @@ fn lookup_ip(
     ip: &str,
     qqwry: &mut QQWryParser,
     ipv6wry: &IPv6WryParser,
-    mmdb: &MMDB,
+    mmdb: &Mmdb,
     // mmdb_city: &Reader<Vec<u8>>,
     // mmdb_asn: &Reader<Vec<u8>>,
 ) -> String {
@@ -46,14 +46,24 @@ fn lookup_ip(
         if mmdb.enable {
             if result.is_empty() {
                 // MaxMind ASN
-                if let Ok(asn) = mmdb.mmdb_asn.as_ref().unwrap().lookup::<geoip2::Asn>(ip_addr) {
+                if let Ok(asn) = mmdb
+                    .mmdb_asn
+                    .as_ref()
+                    .unwrap()
+                    .lookup::<geoip2::Asn>(ip_addr)
+                {
                     let asn_number = asn.autonomous_system_number.unwrap_or(0);
                     let asn_org = asn.autonomous_system_organization.unwrap_or("");
                     result.push_str(&format!("AS{} {} ", asn_number, asn_org));
                 }
 
                 // MaxMind City
-                if let Ok(city) = mmdb.mmdb_city.as_ref().unwrap().lookup::<geoip2::City>(ip_addr) {
+                if let Ok(city) = mmdb
+                    .mmdb_city
+                    .as_ref()
+                    .unwrap()
+                    .lookup::<geoip2::City>(ip_addr)
+                {
                     let country = city
                         .country
                         .as_ref()
@@ -103,7 +113,7 @@ fn transform_line(
     ip_regex: &Regex,
     qqwry: &mut QQWryParser,
     ipv6wry: &mut IPv6WryParser,
-    mmdb: &MMDB,
+    mmdb: &Mmdb,
     cache: &mut LruCache<String, String>,
 ) -> String {
     let mut shift = 0;
@@ -165,13 +175,13 @@ fn main() -> io::Result<()> {
             Reader::open_readfile("/usr/share/opensearch/modules/ingest-geoip/GeoLite2-ASN.mmdb")
                 .expect("Failed to load GeoLite2-ASN.mmdb");
 
-        MMDB {
+        Mmdb {
             enable: cli.maxmind,
             mmdb_city: Some(mmdb_city),
             mmdb_asn: Some(mmdb_asn),
         }
     } else {
-        MMDB {
+        Mmdb {
             enable: cli.maxmind,
             mmdb_city: None,
             mmdb_asn: None,
