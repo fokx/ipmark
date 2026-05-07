@@ -16,7 +16,7 @@ use std::num::NonZeroUsize;
 
 use clap::Parser;
 
-/// Simple program to greet a person
+/// Markup IPs in stdin with geo-locations
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Cli {
