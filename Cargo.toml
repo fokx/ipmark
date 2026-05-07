@@ -11,4 +11,4 @@ lru = "0.9"   # LRU cache for storing previous lookups
 ipaddress = "0.1.3"
 encoding_rs = "0.8"
 byteorder = "1.5"
-clap = { version = "4.6.1", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive", "env"] }

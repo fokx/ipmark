@@ -21,12 +21,28 @@ use clap::Parser;
 #[command(version, about, long_about = None)]
 struct Cli {
     /// Use Maxmind instead of QQWry
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "false")]
     maxmind: bool,
+    #[arg(long, env = "QQWRY", default_value = "/i/assets/ipmark/QQWry.Dat")]
+    qqwry: String,
+    #[arg(long, env = "IPV6WRY", default_value = "/i/assets/ipmark/ipv6wry.db")]
+    ipv6wry: String,
+    #[arg(
+        long,
+        env = "MAXMIND_CITY",
+        default_value = "/usr/share/opensearch/modules/ingest-geoip/GeoLite2-City.mmdb"
+    )]
+    maxmind_city: String,
+    #[arg(
+        long,
+        env = "MAXMIND_ASN",
+        default_value = "/usr/share/opensearch/modules/ingest-geoip/GeoLite2-ASN.mmdb"
+    )]
+    maxmind_asn: String,
 }
 
 struct Mmdb {
-    enable: bool,
+    enabled: bool,
     mmdb_city: Option<Reader<Vec<u8>>>,
     mmdb_asn: Option<Reader<Vec<u8>>>,
 }
@@ -43,7 +59,7 @@ fn lookup_ip(
     let mut result = String::new();
 
     if let Ok(ip_addr) = IpAddr::from_str(ip) {
-        if mmdb.enable {
+        if mmdb.enabled {
             if result.is_empty() {
                 // MaxMind ASN
                 if let Ok(asn) = mmdb
@@ -156,10 +172,8 @@ fn main() -> io::Result<()> {
     let ip_regex = Regex::new(
         r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?"
     ).unwrap();
-    let mut qqwry =
-        QQWryParser::new("/i/assets/ipmark/QQWry.Dat").expect("Failed to load QQWry.Dat");
-    let mut ipv6wry =
-        IPv6WryParser::new("/i/assets/ipmark/ipv6wry.db").expect("Failed to load IPv6Wry.Dat");
+    let mut qqwry = QQWryParser::new(&cli.qqwry).expect("Failed to load QQWry.Dat");
+    let mut ipv6wry = IPv6WryParser::new(&cli.ipv6wry).expect("Failed to load IPv6Wry.Dat");
 
     // LRU cache for repeated IPs
     let mut cache = LruCache::new(NonZeroUsize::new(1000).unwrap());
@@ -169,20 +183,18 @@ fn main() -> io::Result<()> {
     let mut handle_out = stdout.lock();
     let mmdb = if cli.maxmind {
         let mmdb_city =
-            Reader::open_readfile("/usr/share/opensearch/modules/ingest-geoip/GeoLite2-City.mmdb")
-                .expect("Failed to load GeoLite2-City.mmdb");
+            Reader::open_readfile(&cli.maxmind_city).expect("Failed to load GeoLite2-City.mmdb");
         let mmdb_asn =
-            Reader::open_readfile("/usr/share/opensearch/modules/ingest-geoip/GeoLite2-ASN.mmdb")
-                .expect("Failed to load GeoLite2-ASN.mmdb");
+            Reader::open_readfile(&cli.maxmind_asn).expect("Failed to load GeoLite2-ASN.mmdb");
 
         Mmdb {
-            enable: cli.maxmind,
+            enabled: cli.maxmind,
             mmdb_city: Some(mmdb_city),
             mmdb_asn: Some(mmdb_asn),
         }
     } else {
         Mmdb {
-            enable: cli.maxmind,
+            enabled: cli.maxmind,
             mmdb_city: None,
             mmdb_asn: None,
         }
