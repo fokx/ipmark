@@ -140,36 +140,44 @@ fn transform_line(
     mmdb: &Mmdb,
     cache: &mut LruCache<String, String>,
 ) -> String {
-    let mut shift = 0;
-    let mut output = line.to_string();
+    let mut output = String::with_capacity(line.len() + 64);
+    let mut last_end = 0;
 
     for mat in ip_regex.find_iter(line) {
+        // Append text between last match and current match
+        output.push_str(&line[last_end..mat.start()]);
+
         let ip_str = mat.as_str();
-        if let Ok(ip_addr) = IPAddress::parse(ip_str) {
+        output.push_str(ip_str); // Push the original IP
+
+        // Validate and lookup
+        let info = if let Ok(ip_addr) = IPAddress::parse(ip_str) {
             if ip_addr.is_private() || ip_addr.is_loopback() {
-                continue;
+                None
+            } else if let Some(cached) = cache.get(ip_str) {
+                Some(cached.clone())
+            } else {
+                let info = lookup_ip(ip_str, qqwry, ipv6wry, mmdb);
+                if !info.is_empty() {
+                    cache.put(ip_str.to_string(), info.clone());
+                    Some(info)
+                } else {
+                    None
+                }
             }
         } else {
-            continue;
-        }
-
-        // Cache repeated IPs
-        let info = if let Some(cached) = cache.get(ip_str) {
-            cached.clone()
-        } else {
-            let info = lookup_ip(ip_str, qqwry, ipv6wry, mmdb);
-            cache.put(ip_str.to_string(), info.clone());
-            info
+            None
         };
 
-        if !info.is_empty() {
-            let pos = mat.end() + shift;
-            output.insert_str(pos, &format!("({})", info));
-            // output.insert_str(pos, &format!(",{}", info));
-            shift += info.len() + 1; // account for the comma
+        if let Some(geo) = info {
+            output.push_str(&format!("({})", geo));
         }
+
+        last_end = mat.end();
     }
 
+    // Append remaining text after the last match
+    output.push_str(&line[last_end..]);
     output
 }
 
@@ -178,8 +186,18 @@ fn main() -> io::Result<()> {
 
     // IPv4 & IPv6 regex
     let ip_regex = Regex::new(
-        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?"
+        r"(?x)
+    \b
+    (?:
+        (?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?) # IPv4
+        |
+        (?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4} # IPv6
+        |
+        (?:(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::(?:(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})? # IPv6 compressed
+    )
+    \b"
     ).unwrap();
+
     let mut qqwry = QQWryParser::new(&cli.qqwry).expect("Failed to load QQWry.Dat");
     let mut ipv6wry = IPv6WryParser::new(&cli.ipv6wry).expect("Failed to load IPv6Wry.Dat");
 
