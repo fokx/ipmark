@@ -20,7 +20,7 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    /// Name of the person to greet
+    /// Use Maxmind instead of QQWry
     #[arg(short, long)]
     maxmind: bool,
 }
