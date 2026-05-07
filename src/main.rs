@@ -16,29 +16,37 @@ use std::num::NonZeroUsize;
 
 use clap::Parser;
 
-/// Markup IPs in stdin with geo-locations
+/// Markup IPs in stdin or arguments with geo-locations
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Cli {
     /// Use Maxmind instead of QQWry
-    #[arg(short, long, default_value = "false")]
+    #[arg(short, long, default_value_t = false)]
     maxmind: bool,
+
     #[arg(long, env = "QQWRY", default_value = "/i/assets/ipmark/QQWry.Dat")]
     qqwry: String,
+
     #[arg(long, env = "IPV6WRY", default_value = "/i/assets/ipmark/ipv6wry.db")]
     ipv6wry: String,
+
     #[arg(
         long,
         env = "MAXMIND_CITY",
         default_value = "/usr/share/opensearch/modules/ingest-geoip/GeoLite2-City.mmdb"
     )]
     maxmind_city: String,
+
     #[arg(
         long,
         env = "MAXMIND_ASN",
         default_value = "/usr/share/opensearch/modules/ingest-geoip/GeoLite2-ASN.mmdb"
     )]
     maxmind_asn: String,
+
+    /// Optional IP strings/text to parse. If empty, reads from stdin.
+    #[arg(trailing_var_arg = true)]
+    inputs: Vec<String>,
 }
 
 struct Mmdb {
@@ -178,7 +186,6 @@ fn main() -> io::Result<()> {
     // LRU cache for repeated IPs
     let mut cache = LruCache::new(NonZeroUsize::new(1000).unwrap());
 
-    let stdin = io::stdin();
     let stdout = io::stdout();
     let mut handle_out = stdout.lock();
     let mmdb = if cli.maxmind {
@@ -200,17 +207,30 @@ fn main() -> io::Result<()> {
         }
     };
 
-    for line in stdin.lock().lines() {
-        let line = line?;
-        let transformed = transform_line(
-            &line,
-            &ip_regex,
-            &mut qqwry,
-            &mut ipv6wry,
-            &mmdb,
-            &mut cache,
-        );
-        writeln!(handle_out, "{}", transformed)?;
+    if !cli.inputs.is_empty() {
+        // Mode: Process command line arguments
+        // We join with space to handle multiple args like the bash "$@"
+        let input_text = cli.inputs.join(" ");
+        for line in input_text.lines() {
+            let transformed =
+                transform_line(line, &ip_regex, &mut qqwry, &mut ipv6wry, &mmdb, &mut cache);
+            writeln!(handle_out, "{}", transformed)?;
+        }
+    } else {
+        // Mode: Process stdin
+        let stdin = io::stdin();
+        for line in stdin.lock().lines() {
+            let line = line?;
+            let transformed = transform_line(
+                &line,
+                &ip_regex,
+                &mut qqwry,
+                &mut ipv6wry,
+                &mmdb,
+                &mut cache,
+            );
+            writeln!(handle_out, "{}", transformed)?;
+        }
     }
 
     Ok(())
